@@ -1,0 +1,12 @@
+{
+  "name": "oram-algorithm",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node oram-access.js"
+  },
+  "dependencies": {
+    "fs-extra": "^8.0.1",
+    "signale": "^1.4.0",
+    "algorithm-visualizer": "latest"
+  }
+}
