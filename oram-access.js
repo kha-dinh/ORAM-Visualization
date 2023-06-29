@@ -24,14 +24,13 @@ const G = [ // G[i][j] indicates whether the path from the i-th node to the j-th
 var height = 4
 var num_blocks = 15
 var max_leafs = 8
-var stash_capacity = 8
+var stash_capacity = 5
 
 var stash = Array(stash_capacity)
 var posmap = Array(num_blocks)
 var block_id_in_tree = Array(num_blocks)
 var block_access_pattern = Array(num_blocks)
 var path_access_pattern = Array(max_leafs)
-
 
 const key = Randomize.Integer({ min: 0, max: G.length - 1 }); // item to be searched
 // const key = range(0, len,)
@@ -49,8 +48,11 @@ const logger = new LogTracer(' Log ');
 function get_random_leaf() {
   return Randomize.Integer({ min: 0, max: max_leafs - 1 })
 }
-function pick_random_stash_slot() {
-  return Randomize.Integer({ min: 0, max: stash_capacity - 1 })
+
+function get_free_stash_slot() {
+
+
+  return stash.indexOf(-1);
 }
 
 // Leaf ID
@@ -80,11 +82,14 @@ function initialize() {
     block_id_in_tree[index] = -1;
     posmap[index] = get_random_leaf();
   }
+
+
   Layout.setRoot(new VerticalLayout([graphTracer, stashTracer, posmapTracer, blockTracer, blockAccessTracer, pathAccessTracer, logger]));
 
   posmapTracer.set(posmap)
   stashTracer.set(stash)
   blockTracer.set(block_id_in_tree)
+  logger.println(block_id_in_tree)
 
   // posmapTracer.
   graphTracer.set(G);
@@ -107,23 +112,24 @@ function fetch_blocks_to_stash(leaf) {
   let patched_block = [];
   //}
   path.map((node) => {
+    logger.printf("Fetching node %d ,", node)
     graphTracer.select(node);
     block_access_pattern[node]++;
     blockAccessTracer.set(block_access_pattern);
-
-
-
-    let free_stash_slot = stash.indexOf(-1);
+    let free_stash_slot = get_free_stash_slot();
     let block_id = block_id_in_tree[node];
-    if (block_id) {
+    if (block_id != -1) {
       stash[free_stash_slot] = block_id;
       stashTracer.patch(free_stash_slot, block_id);
       patched_stash.push(free_stash_slot);
 
-      block_id_in_tree[node] = -1
-      blockTracer.patch(node, -1);
-      patched_block.push(node)
     }
+
+    block_id_in_tree[node] = -1
+    blockTracer.patch(node, -1);
+    patched_block.push(node)
+
+    logger.printf("content: %d\n", block_id)
     Tracer.delay()
   });
 
@@ -140,32 +146,36 @@ function fetch_blocks_to_stash(leaf) {
   Tracer.delay()
 }
 function evict_blocks_from_stash(leaf) {
-  logger.printf("Selecting blocks to evict from stash!\n");
   Tracer.delay();
   // Try to find unused block first
   // let evict_stash_slot = stash.indexOf(-1);
   let evict_path = get_path(leaf)
-  logger.printf("Evicting blocks\n");
-  Tracer.delay();
+  logger.printf("Evicting blocks to leaf %d\n", leaf);
 
   let patched_stash = []
   let patched_block = []
   for (let index = evict_path.length - 1; index >= 0; index--) {
     let tree_idx = evict_path[index];
     let stash_idx = stash.findIndex((value, _idx, _obj) => { return value != -1 })
-    block_id_in_tree[tree_idx] = stash[stash_idx];
+
+    let block_id;
 
     if (stash_idx != -1) {
-      // Remove from stash
-      blockTracer.patch(tree_idx, stash[stash_idx])
+      block_id = stash[stash_idx];
       stash[stash_idx] = -1;
       stashTracer.patch(stash_idx, -1);
-
-      patched_block.push(tree_idx)
       patched_stash.push(stash_idx)
     }
-    graphTracer.select(tree_idx)
+    else block_id = -1;
+
+    logger.printf("Evicting blocks %d\n", block_id, leaf);
+    block_id_in_tree[tree_idx] = block_id;
     block_access_pattern[tree_idx]++;
+
+    blockTracer.patch(tree_idx, block_id)
+    patched_block.push(tree_idx)
+
+    graphTracer.select(tree_idx)
     blockAccessTracer.set(block_access_pattern);
     Tracer.delay();
   }
@@ -184,6 +194,8 @@ function evict_blocks_from_stash(leaf) {
   pathAccessTracer.set(path_access_pattern);
   Tracer.delay();
 
+
+
 }
 // input: block_id 
 // output: block id is inside stash
@@ -199,8 +211,6 @@ function oram_access(block_id, is_write) {
     return
   }
   else {
-
-
     logger.printf("Updating posmap!\n");
     let leaf = posmap[block_id]
     let new_leaf = get_random_leaf();
@@ -223,8 +233,20 @@ function oram_access(block_id, is_write) {
     // posmap.find(block_id)
   }
 }
-
-initialize();
-for (let index = 0; index < 20; index++) {
-  oram_access(index % 15, true);
+function oram_read(block) {
+  oram_access(block, false)
 }
+function oram_write(block) {
+  oram_access(block, true)
+}
+initialize();
+for (let index = 0; index < 15; index++) {
+  oram_write(index % 15, true);
+}
+for (let index = 0; index < 50; index++) {
+  oram_read(index % 15, true);
+}
+// oram_access(0, true);
+// oram_access(2, true);
+// oram_access(5, true);
+// oram_access(12, true);
