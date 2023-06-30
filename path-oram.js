@@ -2,37 +2,16 @@
 const { Tracer, GraphTracer, LogTracer, Randomize, Layout, VerticalLayout, Array1DTracer, Array2DTracer } = require('algorithm-visualizer');
 // }
 
-const G = [ // G[i][j] indicates whether the path from the i-th node to the j-th node exists or not
-  [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-];
+var G = []
+var num_blocks;
+var max_leafs;
+var stash_capacity;
+var stash = []
+var posmap = []
+var block_id_in_tree = []
+var block_access_pattern = []
+var path_access_pattern = []
 
-
-var height = 4
-var num_blocks = 15
-var max_leafs = 8
-var stash_capacity = 8
-
-var stash = Array(stash_capacity)
-var posmap = Array(num_blocks)
-var block_id_in_tree = Array(num_blocks)
-var block_access_pattern = Array(num_blocks)
-var path_access_pattern = Array(max_leafs)
-
-const key = Randomize.Integer({ min: 0, max: G.length - 1 }); // item to be searched
 // const key = range(0, len,)
 const graphTracer = new GraphTracer('ORAM Tree');
 const stashTracer = new Array1DTracer('ORAM Stash');
@@ -45,12 +24,46 @@ const logger = new LogTracer('Log');
 
 // }                     h
 
+function build_oram_adj_matrix() {
+  G = new Array(num_blocks).fill(0).map(() => new Array(0).fill(0))
+  let j = 0;
+  for (let i = 0; i < num_blocks - max_leafs; i++) {
+    G[i][i + j + 1] = 1;
+    G[i][i + j + 2] = 1;
+    j++;
+  }
+}
+
+function initialize(height) {
+  num_blocks = (2 ** height) - 1
+  max_leafs = 2 ** (height - 1)
+  stash_capacity = height * 2
+  stash = new Array(stash_capacity).fill(-1)
+  posmap = new Array(num_blocks)
+  block_id_in_tree = new Array(num_blocks).fill(-1)
+  block_access_pattern = new Array(num_blocks).fill(0)
+  path_access_pattern = new Array(max_leafs).fill(0)
+
+  build_oram_adj_matrix()
+  for (let index = 0; index < num_blocks; index++) {
+    posmap[index] = get_random_leaf();
+  }
+
+  Layout.setRoot(new VerticalLayout([posmapTracer, stashTracer, graphTracer, blockTracer, blockAccessTracer, pathAccessTracer, logger]));
+  posmapTracer.set(posmap)
+  stashTracer.set(stash)
+  blockTracer.set(block_id_in_tree)
+  graphTracer.set(G);
+  // Set root node = 0
+  graphTracer.layoutTree(0);
+}
+
+
 function get_random_leaf() {
   return Randomize.Integer({ min: 0, max: max_leafs - 1 })
 }
 
 function get_free_stash_slot() {
-
   let stash_idx = stash.indexOf(-1);
   if (stash_idx == -1) {
     throw new Error('Stash is full');
@@ -75,33 +88,7 @@ function get_path(leaf_id) {
   }
   return path;
 }
-function initialize() {
-  for (let index = 0; index < stash_capacity; index++) {
-    stash[index] = -1;
-  }
 
-  for (let index = 0; index < max_leafs; index++) {
-    path_access_pattern[index] = 0;
-  }
-  for (let index = 0; index < num_blocks; index++) {
-    block_access_pattern[index] = 0;
-    block_id_in_tree[index] = -1;
-    posmap[index] = get_random_leaf();
-  }
-
-
-  Layout.setRoot(new VerticalLayout([posmapTracer, stashTracer, graphTracer, blockTracer, blockAccessTracer, pathAccessTracer, logger]));
-
-  posmapTracer.set(posmap)
-  stashTracer.set(stash)
-  blockTracer.set(block_id_in_tree)
-
-  // posmapTracer.
-  graphTracer.set(G);
-  graphTracer.layoutTree(0);
-  // stashTracer.log(logger)
-  // graphTracer.log(logger);
-}
 function read_tree_to_stash(stash_idx, tree_idx) {
   graphTracer.select(tree_idx);
   block_access_pattern[tree_idx]++;
@@ -150,7 +137,7 @@ function is_evictable(block_id, leaf, level) {
   // I.e., their path colides
   let can_evict = (P(leaf, level) == P(posmap[block_id], level))
   if (can_evict)
-    logger.printf("-> block %d (leaf = %d) evictable at for leaf %d level %d\n", block_id, posmap[block_id], leaf, level)
+    logger.printf("-> block %d (leaf = %d) evictable cat for leaf %d level %d\n", block_id, posmap[block_id], leaf, level)
   return can_evict;
 }
 
@@ -234,18 +221,32 @@ function oram_access(block_id, is_write) {
     fetch_blocks_to_stash(leaf);
 
     logger.printf("3. %s data of block %d inside stash\n", is_write ? "Writing" : "Reading", block_id)
+    let stash_idx = stash.indexOf(block_id)
     if (is_write) {
-      let free_stash_slot = get_free_stash_slot()
-      stash[free_stash_slot] = block_id;
-      stashTracer.patch(free_stash_slot, block_id);
-      Tracer.delay()
-      stashTracer.depatch(free_stash_slot);
+      if (stash_idx == -1) {
+        let free_stash_slot = get_free_stash_slot()
+        stash[free_stash_slot] = block_id;
+        stashTracer.patch(free_stash_slot, block_id);
+        Tracer.delay()
+        stashTracer.depatch(free_stash_slot);
+      }
+      else {
+        stashTracer.select(stash_idx);
+        Tracer.delay()
+        stashTracer.deselect(stash_idx);
+      }
     }
     else {
+      if (stash_idx != -1) {
+        stashTracer.select(stash_idx);
+        Tracer.delay()
+        stashTracer.deselect(stash_idx);
+
+      }
 
     }
 
-    evict_blocks_from_stash(leaf, block_id);
+    evict_blocks_from_stash(leaf);
     posmapTracer.depatch(block_id);
     // posmap.find(block_id)
   }
@@ -259,14 +260,33 @@ function oram_read(block) {
 function oram_write(block) {
   oram_access(block, true)
 }
-initialize();
-for (let index = 0; index < 15; index++) {
-  oram_write(index % 15, true);
+initialize(height = 3);
+
+// oram_write(15);
+function sequential_write(count) {
+  for (let index = 0; index < count; index++) {
+    oram_write(index % num_blocks);
+  }
 }
-for (let index = 0; index < 50; index++) {
-  oram_read(index % 15, true);
+
+function random_write(count) {
+  for (let index = 0; index < count; index++) {
+    const block = Randomize.Integer({ min: 0, max: num_blocks - 1 }); // item to be searched
+    oram_write(block);
+  }
 }
-// oram_access(0, true);
-// oram_access(2, true);
-// oram_access(5, true);
-// oram_access(12, true);
+
+function sequential_read(count) {
+  for (let index = 0; index < count; index++) {
+    oram_read(index % num_blocks);
+  }
+}
+
+function random_read(count) {
+  for (let index = 0; index < count; index++) {
+    const block = Randomize.Integer({ min: 0, max: num_blocks - 1 }); // item to be searched
+    oram_read(block);
+  }
+}
+
+sequential_write(100)
