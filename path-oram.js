@@ -34,10 +34,14 @@ function build_oram_adj_matrix() {
   }
 }
 
-function initialize(height) {
+function initialize(height, stash_size) {
+
   num_blocks = (2 ** height) - 1;
   max_leafs = 2 ** (height - 1);
-  stash_capacity = (num_blocks);
+  if (stash_size)
+    stash_capacity = stash_size
+  else
+    stash_capacity = (num_blocks);
   stash = new Array(stash_capacity).fill(-1)
   posmap = new Array(num_blocks)
   block_id_in_tree = new Array(num_blocks).fill(-1)
@@ -59,8 +63,16 @@ function initialize(height) {
 }
 
 
-function get_random_leaf() {
-  return Randomize.Integer({ min: 0, max: max_leafs - 1 })
+function get_random_leaf(exclude) {
+  let random = Randomize.Integer({ min: 0, max: max_leafs - 1 })
+  if (exclude) {
+    while (random == exclude) {
+      random = Randomize.Integer({ min: 0, max: max_leafs - 1 })
+
+    }
+  }
+
+  return random;
 }
 
 function get_free_stash_slot() {
@@ -232,7 +244,7 @@ function oram_access(block_id, is_write) {
   logger.printf("ORAM %s access, block: %d\n", is_write ? "write" : "read", block_id);
 
   let leaf = posmap[block_id]
-  let new_leaf = get_random_leaf();
+  let new_leaf = get_random_leaf(leaf);
   logger.printf("1. Updating posmap of block %d: %d -> %d\n", block_id, leaf, new_leaf);
   posmap[block_id] = new_leaf;
   posmapTracer.patch(block_id, new_leaf)
@@ -285,5 +297,17 @@ function random_read(count) {
     oram_read(block);
   }
 }
-initialize(height = 4);
-random_write(1000)
+function random_access(count) {
+  for (let index = 0; index < count; index++) {
+    const block = Randomize.Integer({ min: 0, max: num_blocks - 1 }); // item to be searched
+    let readwrite = Randomize.Integer({ min: 0, max: 1 });
+    if (readwrite == 1) {
+      oram_write(block);
+    }
+    else {
+      oram_write(block)
+    }
+  }
+}
+initialize(height = 4, 12);
+random_access(1000)
