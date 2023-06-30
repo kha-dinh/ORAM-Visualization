@@ -35,9 +35,9 @@ function build_oram_adj_matrix() {
 }
 
 function initialize(height) {
-  num_blocks = (2 ** height) - 1
-  max_leafs = 2 ** (height - 1)
-  stash_capacity = height * 2
+  num_blocks = (2 ** height) - 1;
+  max_leafs = 2 ** (height - 1);
+  stash_capacity = num_blocks;
   stash = new Array(stash_capacity).fill(-1)
   posmap = new Array(num_blocks)
   block_id_in_tree = new Array(num_blocks).fill(-1)
@@ -194,62 +194,56 @@ function evict_blocks_from_stash(leaf) {
   })
   pathAccessTracer.set(path_access_pattern);
   Tracer.delay();
-
-
-
+}
+function stash_access(block_id, is_write) {
+  let stash_idx = stash.indexOf(block_id)
+  if (is_write) {
+    if (stash_idx == -1) {
+      let free_stash_slot = get_free_stash_slot()
+      stash[free_stash_slot] = block_id;
+      stashTracer.patch(free_stash_slot, block_id);
+      Tracer.delay()
+      stashTracer.depatch(free_stash_slot);
+    }
+    else {
+      stashTracer.select(stash_idx);
+      Tracer.delay()
+      stashTracer.deselect(stash_idx);
+    }
+  }
+  else {
+    if (stash_idx != -1) {
+      stashTracer.select(stash_idx);
+      Tracer.delay()
+      stashTracer.deselect(stash_idx);
+    }
+    else {
+      logger.printf("-> Block %d not found!\n", block);
+    }
+  }
 }
 // input: block_id 
 // output: block id is inside stash
 function oram_access(block_id, is_write) {
   logger.printf("ORAM %s access, block: %d\n", is_write ? "write" : "read", block_id);
 
-  let stash_idx = stash.indexOf(block_id)
-  if (stash_idx != -1) {
-    logger.printf("Found block in stash!\n");
-    stashTracer.select(stash_idx)
-    Tracer.delay()
-    stashTracer.deselect(stash_idx)
-  }
-  else {
-    let leaf = posmap[block_id]
-    let new_leaf = get_random_leaf();
-    logger.printf("1. Updating posmap of block %d: %d -> %d\n", block_id, leaf, new_leaf);
-    posmap[block_id] = new_leaf
-    posmapTracer.patch(block_id, new_leaf)
-    Tracer.delay()
+  let leaf = posmap[block_id]
+  let new_leaf = get_random_leaf();
+  logger.printf("1. Updating posmap of block %d: %d -> %d\n", block_id, leaf, new_leaf);
+  posmap[block_id] = new_leaf;
+  posmapTracer.patch(block_id, new_leaf)
+  Tracer.delay()
 
-    fetch_blocks_to_stash(leaf);
+  fetch_blocks_to_stash(leaf);
 
-    logger.printf("3. %s data of block %d inside stash\n", is_write ? "Writing" : "Reading", block_id)
-    let stash_idx = stash.indexOf(block_id)
-    if (is_write) {
-      if (stash_idx == -1) {
-        let free_stash_slot = get_free_stash_slot()
-        stash[free_stash_slot] = block_id;
-        stashTracer.patch(free_stash_slot, block_id);
-        Tracer.delay()
-        stashTracer.depatch(free_stash_slot);
-      }
-      else {
-        stashTracer.select(stash_idx);
-        Tracer.delay()
-        stashTracer.deselect(stash_idx);
-      }
-    }
-    else {
-      if (stash_idx != -1) {
-        stashTracer.select(stash_idx);
-        Tracer.delay()
-        stashTracer.deselect(stash_idx);
+  logger.printf("3. %s data of block %d inside stash\n", is_write ? "Writing" : "Reading", block_id)
+  stash_access(block_id, is_write);
 
-      }
 
-    }
-
-    evict_blocks_from_stash(leaf);
-    posmapTracer.depatch(block_id);
-    // posmap.find(block_id)
-  }
+  evict_blocks_from_stash(leaf);
+  posmapTracer.depatch(block_id);
+  // posmap.find(block_id)
+  //
   logger.println("ORAM access done.")
   logger.println("------------------")
   Tracer.delay()
@@ -289,4 +283,4 @@ function random_read(count) {
   }
 }
 
-sequential_write(100)
+sequential_write(1000)
