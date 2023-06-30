@@ -1,4 +1,4 @@
-# oram-visualization
+# ORAM Visualization
 Path ORAM algorithm visualization using [Algorithm Visualizer](https://github.com/algorithm-visualizer/algorithm-visualizer).
 
 # How to use
