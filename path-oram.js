@@ -37,7 +37,7 @@ function build_oram_adj_matrix() {
 function initialize(height) {
   num_blocks = (2 ** height) - 1;
   max_leafs = 2 ** (height - 1);
-  stash_capacity = num_blocks;
+  stash_capacity = (num_blocks);
   stash = new Array(stash_capacity).fill(-1)
   posmap = new Array(num_blocks)
   block_id_in_tree = new Array(num_blocks).fill(-1)
@@ -89,18 +89,22 @@ function get_path(leaf_id) {
   return path;
 }
 
-function read_tree_to_stash(stash_idx, tree_idx) {
+function read_tree_to_stash(tree_idx) {
+
   graphTracer.select(tree_idx);
   block_access_pattern[tree_idx]++;
   blockAccessTracer.set(block_access_pattern);
   let block_id = block_id_in_tree[tree_idx];
+  let stash_idx = -1;
   if (block_id != -1) {
+    stash_idx = get_free_stash_slot();
     stash[stash_idx] = block_id;
     stashTracer.patch(stash_idx, block_id);
   }
   logger.printf("-> Fetching node %d, block %d, into stash\n", tree_idx, block_id)
   block_id_in_tree[tree_idx] = -1
   blockTracer.patch(tree_idx, -1);
+  return stash_idx;
 
 }
 function fetch_blocks_to_stash(leaf) {
@@ -113,10 +117,10 @@ function fetch_blocks_to_stash(leaf) {
   let patched_block = [];
   //}
   path.map((tree_idx) => {
-    let stash_idx = get_free_stash_slot();
-    read_tree_to_stash(stash_idx, tree_idx);
+    let stash_idx = read_tree_to_stash(tree_idx);
+    if (stash_idx != -1)
+      patched_stash.push(stash_idx);
     patched_block.push(tree_idx)
-    patched_stash.push(stash_idx);
     Tracer.delay()
   });
 
@@ -127,9 +131,9 @@ function fetch_blocks_to_stash(leaf) {
   patched_block.map((node) => {
     blockTracer.depatch(node);
   })
-  for (let index = 0; index < patched_stash.length; index++) {
-    stashTracer.depatch(patched_stash[index]);
-  }
+  patched_stash.map((stash_idx) => {
+    stashTracer.depatch(stash_idx);
+  })
   Tracer.delay()
 }
 
@@ -254,7 +258,6 @@ function oram_read(block) {
 function oram_write(block) {
   oram_access(block, true)
 }
-initialize(height = 3);
 
 // oram_write(15);
 function sequential_write(count) {
@@ -282,5 +285,5 @@ function random_read(count) {
     oram_read(block);
   }
 }
-
-sequential_write(1000)
+initialize(height = 4);
+random_write(1000)
